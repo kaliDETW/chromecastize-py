@@ -3,22 +3,14 @@
 import argparse
 import datetime
 import subprocess
-import shlex
 import sys
 import os
 from subprocess import check_output
 
-supported_extensions = 'mkv', 'avi', 'mp4', '3gp', 'mov', 'mpg', 'mpeg', 'qt', 'wmv', 'm2ts', 'rmvb', 'rm', 'rv', \
+SUPPORTED_EXTENSIONS = 'mkv', 'avi', 'mp4', '3gp', 'mov', 'mpg', 'mpeg', 'qt', 'wmv', 'm2ts', 'rmvb', 'rm', 'rv', \
                        'ogm', 'flv', 'asf'
-
-supported_containers = "('MPEG-4' 'Matroska')"
-unsupported_containers = ('BDAV' 'AVI' 'Flash Video')
-
-supported_video_codecs = ('AVC')
-unsupported_video_codecs = ('MPEG-4 Visual' 'xvid' 'MPEG Video')
-
-supported_audio_codecs = ('AAC' 'MPEG Audio' 'Vorbis' 'Ogg' 'VorbisVorbis')
-unsupported_audio_codecs = ('AC-3' 'DTS' 'PCM')
+SUPPORTED_VIDEO_CODECS = ('AVC')
+SUPPORTED_AUDIO_CODECS = ('AAC' 'MPEG Audio' 'Vorbis' 'Ogg' 'VorbisVorbis')
 
 DEFAULT_VCODEC = "h264"
 DEFAULT_ACODEC = "libvorbis"
@@ -37,9 +29,9 @@ def _check_path():
     else:
         sep = ':'
 
-    if which("ffmpeg") == None:
+    if _which("ffmpeg") == None:
         _add_program_to_path("ffmpeg/bin/")
-    if which("mediainfo") == None:
+    if _which("mediainfo") == None:
         _add_program_to_path("mediainfo/")
 
 
@@ -73,19 +65,19 @@ def start_transcoding_process(path):
     """
     if os.path.isfile(path):  # process a file
         params = _set_ffmpeg_params(path)
-        do_ffmpeg_transcoding(path, params)
+        _do_ffmpeg_transcoding(path, params)
     elif os.path.isdir(path):  # process a directory
         for file in os.listdir(path):
             print("processing '%s'.." % file)
             filepath = os.path.join(path, file)
             params = _set_ffmpeg_params(filepath)
-            do_ffmpeg_transcoding(filepath, params)
+            _do_ffmpeg_transcoding(filepath, params)
     else:  # It's something else
         print("Invalid input, it is neither a file nor a directory or does not exist! Thus, exiting.")
         sys.exit(-1)
 
 
-def which(program):
+def _which(program):
     """
     checks if a program exists on the path
 
@@ -135,7 +127,9 @@ def _is_supported_file_ending(filepath):
     :param filepath:
     :return: True or False
     """
-    if filepath.lower().endswith(tuple(supported_extensions)):
+    global SUPPORTED_EXTENSIONS
+
+    if filepath.lower().endswith(tuple(SUPPORTED_EXTENSIONS)):
         return True
     else:
         return False
@@ -175,10 +169,11 @@ def _set_vcodec_param(filepath):
     :return: ffmpeg encoding parameter for the video setting
     """
     global DEFAULT_VCODEC
+    global SUPPORTED_VIDEO_CODECS
 
     name = _execute_mediainfo('--Inform=Video;%Format%', filepath)
     print("Video codec: {}".format(name))
-    if name.lower() in supported_video_codecs.lower():  # Is the video codec supported?
+    if name.lower() in SUPPORTED_VIDEO_CODECS.lower():  # Is the video codec supported?
         print("Video codec is compatible, setting video param to 'copy'")
         return "copy"
     else:
@@ -194,10 +189,11 @@ def _set_acodec_param(filepath):
     :return: ffmpeg encoding parameter for the audio setting
     """
     global DEFAULT_ACODEC
+    global SUPPORTED_AUDIO_CODECS
 
     name = _execute_mediainfo('--Inform=Audio;%Format%', filepath)
     print("Audio codec: {}".format(name))
-    if name in supported_audio_codecs:  # Is the audio codec supported by the fire stick?
+    if name in SUPPORTED_AUDIO_CODECS:  # Is the audio codec supported by the fire stick?
         print("Audio codec is compatible, setting video param to 'copy'")
         return "copy"
     else:
@@ -205,7 +201,7 @@ def _set_acodec_param(filepath):
         return DEFAULT_ACODEC
 
 
-def do_ffmpeg_transcoding(filepath, params):
+def _do_ffmpeg_transcoding(filepath, params):
     """
     Uses the ffmpeg encoder with the passed parameters
 
