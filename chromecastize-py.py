@@ -10,14 +10,14 @@ from subprocess import check_output
 SUPPORTED_EXTENSIONS = 'mkv', 'avi', 'mp4', '3gp', 'mov', 'mpg', 'mpeg', 'qt', 'wmv', 'm2ts', 'rmvb', 'rm', 'rv', \
                        'ogm', 'flv', 'asf'
 SUPPORTED_VIDEO_CODECS = ['AVC']
-SUPPORTED_AUDIO_CODECS = ['AAC', 'MPEG Audio', 'Vorbis', 'Ogg', 'VorbisVorbis']
+SUPPORTED_AUDIO_CODECS = ['AAC', 'AC-3', 'MPEG Audio', 'Vorbis', 'Ogg', 'VorbisVorbis']
 
 DEFAULT_VCODEC = "h264"
 DEFAULT_ACODEC = "libvorbis"
 DEFAULT_GFORMAT = "mkv"
 
 
-def _check_path():
+def _set_path(is_synology):
     """
     Checks the path for ffmpeg and mediainfo. If not found, try to add one placed in the same folder as this module.
     If that did not work, exit
@@ -25,19 +25,27 @@ def _check_path():
     :return:
     """
     if sys.platform == 'win32':
-        sep = ';'
+        if _which("ffmpeg") == None:
+            _add_program_to_path("ffmpeg/bin/")
+        if _which("mediainfo") == None:
+            _add_program_to_path("mediainfo/")
     else:
-        sep = ':'
-
-    if _which("ffmpeg") == None:
-        _add_program_to_path("ffmpeg/bin/")
-    if _which("mediainfo") == None:
-        _add_program_to_path("mediainfo/")
+        if is_synology:
+            print("setting synology specific PATH")
+            os.environ['PATH'] = \
+                "/sbin:/bin:/usr/sbin:/usr/bin:/usr/syno/sbin:/usr/syno/bin:/usr/local/sbin:/usr/local/bin"
+            _add_program_to_path("/opt/bin")
+            _add_program_to_path("/usr/local/mediainfo/bin")
+        else:
+            if _which("ffmpeg") == None:
+                _add_program_to_path("ffmpeg/bin/")
+            if _which("mediainfo") == None:
+                _add_program_to_path("mediainfo/")
 
 
 def _add_program_to_path(programpath):
     """
-    Tries to add a program to the path
+    Adds a program to the path
 
     :param programpath:
     :return:
@@ -49,7 +57,8 @@ def _add_program_to_path(programpath):
 
     if os.path.exists(programpath):
         abs_programpath = os.path.abspath(programpath)
-        os.environ['PATH'] += sep + r'' + abs_programpath + ''
+        # os.environ['PATH'] += sep + r'' + abs_programpath + ''
+        os.environ['PATH'] = r'' + abs_programpath + '' + sep + os.environ['PATH']
     else:
         print("Tried to add " + programpath + " to the path but path could not be found.")
         sys.exit(-1)
@@ -69,9 +78,11 @@ def start_transcoding_process(path):
     elif os.path.isdir(path):  # process a directory
         for file in os.listdir(path):
             print("processing '%s'.." % file)
+            start_time = datetime.datetime.now()
             filepath = os.path.join(path, file)
             params = _set_ffmpeg_params(filepath)
             _do_ffmpeg_transcoding(filepath, params)
+            print("# transcoding file duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
     else:  # It's something else
         print("Invalid input, it is neither a file nor a directory or does not exist! Thus, exiting.")
         sys.exit(-1)
@@ -262,10 +273,10 @@ def _do_ffmpeg_transcoding(filepath, params):
                                      finFile=finalFile)
 
         # File needs to be renamed so it's not overwritten)
-        os.rename(filepath, bakname)
+        # os.rename(filepath, bakname)
 
         print("executing " + command)
-        subprocess.call(command, shell=True)
+        # subprocess.call(command, shell=True)
 
         print("%s has successfully been transcoded \n" % filepath)
 
@@ -282,7 +293,8 @@ def _quote(s):
     if os.name == 'nt':
         return "\"" + s.replace("'", "'\"'\"'") + "\""
     else:
-        return "'" + s.replace("'", "'\"'\"'") + "'"
+        import shlex
+        return shlex.quote(s)
 
 
 def main():
@@ -300,12 +312,14 @@ def main():
     # Describe a parser for command-line options
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', required=True, help='filename or directory to transcode')
+    parser.add_argument('-s', '--synology', required=False, help='optional switch to determine if a custom synology '
+                                                                 'path should be assembled')
 
     # Parse all the command-line options, automatically checks for required params
     args = parser.parse_args()
 
     # start the transcoding process
-    _check_path()
+    _set_path(args.synology)
     print("## Starting transcoding process..")
     start_transcoding_process(args.input)
 
