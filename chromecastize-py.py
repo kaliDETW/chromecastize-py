@@ -9,8 +9,8 @@ from subprocess import check_output
 
 SUPPORTED_EXTENSIONS = 'mkv', 'avi', 'mp4', '3gp', 'mov', 'mpg', 'mpeg', 'qt', 'wmv', 'm2ts', 'rmvb', 'rm', 'rv', \
                        'ogm', 'flv', 'asf'
-SUPPORTED_VIDEO_CODECS = ('AVC')
-SUPPORTED_AUDIO_CODECS = ('AAC' 'MPEG Audio' 'Vorbis' 'Ogg' 'VorbisVorbis')
+SUPPORTED_VIDEO_CODECS = ['AVC']
+SUPPORTED_AUDIO_CODECS = ['AAC', 'MPEG Audio', 'Vorbis', 'Ogg', 'VorbisVorbis']
 
 DEFAULT_VCODEC = "h264"
 DEFAULT_ACODEC = "libvorbis"
@@ -140,7 +140,7 @@ def _execute_mediainfo(param, filepath):
         s = check_output(['mediainfo', param, filepath])  # Gets the output from mediainfo
         s1 = s[:-1]  # Removes the second line from output
         name = s1.decode("utf-8")  # s1 is a bytes object but we need a string for the check
-        return name
+        return name.strip()
     except OSError as e:  # Some error happened
         if e.errno == os.errno.ENOENT:  # mediainfo is not installed
             print("Could not find mediainfo on path. Install mediainfo or set the path and try again")
@@ -158,7 +158,28 @@ def _set_subs_param(filepath):
     :return:
     """
     # TODO add subtitle logic
-    return "copy"
+
+    # check for supported subtitle files
+    basefilepath = os.path.splitext(filepath)[0]  # remove the filepath extension from the filepath
+    srt_file = os.path.abspath(basefilepath + ".srt")
+    if os.path.exists(srt_file):
+        print("found .srt subtitle file. Adding ffmpeg subtitle command to params to softcode the subtitle into the "
+              "MKV container..")
+        return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
+    elif os.path.exists(basefilepath + ".ass"):
+        print("found .ass subtitle file, converting to .srt first")
+        # putting together the ffmpeg command
+        command = "ffmpeg -i {filepath} \"{basefilepath}.srt\"".format(filepath=_quote(filepath),
+                                                                       basefilepath=_quote(basefilepath))
+        print("executing " + command)
+        subprocess.call(command, shell=True)
+        # remove old .ass file
+        os.remove(basefilepath + ".ass")
+        print("Adding ffmpeg subtitle command to params to softcode the subtitle into the MKV container..")
+        return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
+    else:
+        print("no external subtitle file found, setting ffmpeg subtitle parameter to 'copy'")
+        return "-scodec copy"
 
 
 def _set_vcodec_param(filepath):
@@ -173,7 +194,7 @@ def _set_vcodec_param(filepath):
 
     name = _execute_mediainfo('--Inform=Video;%Format%', filepath)
     print("Video codec: {}".format(name))
-    if name.lower() in SUPPORTED_VIDEO_CODECS.lower():  # Is the video codec supported?
+    if name in SUPPORTED_VIDEO_CODECS:  # Is the video codec supported?
         print("Video codec is compatible, setting video param to 'copy'")
         return "copy"
     else:
@@ -211,7 +232,7 @@ def _do_ffmpeg_transcoding(filepath, params):
     """
     if (params == None):
         print("{}: Could not recognize valid parameters, thus skipping the file. \n".format(filepath))
-    if all(value == "copy" for value in params.values()):  # check if all values in the dict are 'copy'
+    if all("copy" in value for value in params.values()):  # check if all values in the dict are 'copy'
         print("{}: File is already playable on a chromecast or fire tv stick, thus skipping it. \n".format(filepath))
     else:
         print("{}: Transcoding file. \n".format(filepath))
@@ -231,13 +252,13 @@ def _do_ffmpeg_transcoding(filepath, params):
         # putting together the ffmpeg command
         command = "ffmpeg -loglevel error -stats " \
                   "-i {srcFile} -map 0 " \
-                  "-scodec {subs} " \
-                  "-vcodec {video} " \
-                  "-acodec {audio} " \
+                  "{subtitle} " \
+                  "-c:v {video} " \
+                  "-c:a {audio} " \
                   "{finFile}".format(srcFile=sourceFile,
-                                     subs=str(params["subs"]),
-                                     video=str(params["video"]),
-                                     audio=str(params["audio"]),
+                                     subtitle=params["subs"],
+                                     video=params["video"],
+                                     audio=params["audio"],
                                      finFile=finalFile)
 
         # File needs to be renamed so it's not overwritten)
@@ -285,7 +306,7 @@ def main():
 
     # start the transcoding process
     _check_path()
-    print("Starting transcoding process..")
+    print("## Starting transcoding process..")
     start_transcoding_process(args.input)
 
     # finish, print time needed for execution
