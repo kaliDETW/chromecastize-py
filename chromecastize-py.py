@@ -275,10 +275,10 @@ def _do_ffmpeg_transcoding(filepath, params):
                                      finFile=finalFile)
 
         # File needs to be renamed so it's not overwritten)
-        # os.rename(filepath, bakname)
+        os.rename(filepath, bakname)
 
         print("executing " + command)
-        # subprocess.call(command, shell=True)
+        subprocess.call(command, shell=True)
 
         print("%s has successfully been transcoded \n" % filepath)
 
