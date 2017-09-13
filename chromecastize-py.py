@@ -74,14 +74,16 @@ def start_transcoding_process(path):
     """
     if os.path.isfile(path):  # process a file
         params = _set_ffmpeg_params(path)
-        _do_ffmpeg_transcoding(path, params)
+        if params != None:
+            _do_ffmpeg_transcoding(path, params)
     elif os.path.isdir(path):  # process a directory
         for file in os.listdir(path):
             print("processing '%s'.." % file)
             start_time = datetime.datetime.now()
             filepath = os.path.join(path, file)
             params = _set_ffmpeg_params(filepath)
-            _do_ffmpeg_transcoding(filepath, params)
+            if params != None:
+                _do_ffmpeg_transcoding(filepath, params)
             print("# transcoding file duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
     else:  # It's something else
         print("Invalid input, it is neither a file nor a directory or does not exist! Thus, exiting.")
@@ -243,7 +245,7 @@ def _do_ffmpeg_transcoding(filepath, params):
     """
     if (params == None):
         print("{}: Could not recognize valid parameters, thus skipping the file. \n".format(filepath))
-    if all("copy" in value for value in params.values()):  # check if all values in the dict are 'copy'
+    elif all("copy" in value for value in params.values()):  # check if all values in the dict are 'copy'
         print("{}: File is already playable on a chromecast or fire tv stick, thus skipping it. \n".format(filepath))
     else:
         print("{}: Transcoding file. \n".format(filepath))
@@ -297,6 +299,21 @@ def _quote(s):
         return shlex.quote(s)
 
 
+def _str2bool(v):
+    """
+    parses string to bool
+
+    :param v: string
+    :return: boolean value or raise an error
+    """
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def main():
     """
     Command line main to start the transcoding process.
@@ -312,8 +329,8 @@ def main():
     # Describe a parser for command-line options
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', required=True, help='filename or directory to transcode')
-    parser.add_argument('-s', '--synology', required=False, help='optional switch to determine if a custom synology '
-                                                                 'path should be assembled')
+    parser.add_argument('-s', '--synology', required=False, type=_str2bool, nargs='?',
+                        const=False, help='optional switch to determine if a custom synology path should be assembled')
 
     # Parse all the command-line options, automatically checks for required params
     args = parser.parse_args()
