@@ -35,6 +35,7 @@ def _set_path(is_synology):
             os.environ['PATH'] = \
                 "/sbin:/bin:/usr/sbin:/usr/bin:/usr/syno/sbin:/usr/syno/bin:/usr/local/sbin:/usr/local/bin"
             _add_program_to_path("/opt/bin")
+            _add_program_to_path("/opt/lib")
             _add_program_to_path("/usr/local/mediainfo/bin")
         else:
             if _which("ffmpeg") == None:
