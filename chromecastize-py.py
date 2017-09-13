@@ -84,7 +84,7 @@ def start_transcoding_process(path):
             params = _set_ffmpeg_params(filepath)
             if params != None:
                 _do_ffmpeg_transcoding(filepath, params)
-            print("# transcoding file duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
+            print("# file processing duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
     else:  # It's something else
         print("Invalid input, it is neither a file nor a directory or does not exist! Thus, exiting.")
         sys.exit(-1)
