@@ -273,7 +273,7 @@ def main():
     :return: transcoded video file in mkv format
     """
 
-    # save timestamp
+    # save start timestamp
     start_time = datetime.datetime.now()
 
     # Describe a parser for command-line options
@@ -289,7 +289,7 @@ def main():
     start_transcoding_process(args.input)
 
     # finish, print time needed for execution
-    print("## Transcoding finished after %s seconds" % (datetime.datetime.now() - start_time))
+    print("## Total transcoding duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
 
 
 if __name__ == "__main__":
