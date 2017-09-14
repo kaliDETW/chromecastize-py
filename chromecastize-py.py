@@ -61,7 +61,7 @@ def _add_program_to_path(programpath):
         sys.exit(-1)
 
 
-def start_transcoding_process(path):
+def start_transcoding_process(path, check_only):
     """
     wrapper that checks if we are processing a file or directory, redirect as appropriate, set the ffmpeg settings
     and then execute the transcoding process if necessary.
@@ -71,7 +71,7 @@ def start_transcoding_process(path):
     """
     if os.path.isfile(path):  # process a file
         params = _set_ffmpeg_params(path)
-        if params != None:
+        if params != None and not check_only:
             _do_ffmpeg_transcoding(path, params)
     elif os.path.isdir(path):  # process a directory
         for file in os.listdir(path):
@@ -79,7 +79,7 @@ def start_transcoding_process(path):
             start_time = datetime.datetime.now()
             filepath = os.path.join(path, file)
             params = _set_ffmpeg_params(filepath)
-            if params != None:
+            if params != None and not check_only:
                 _do_ffmpeg_transcoding(filepath, params)
                 print("# file processing duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
     else:  # It's something else
@@ -182,8 +182,8 @@ def _set_subs_param(filepath):
                                                                srt_file=_quote(srt_file))
         print("executing " + command)
         subprocess.call(command, shell=True)
-        # remove old .ass file
-        # os.remove(basefilepath + ".ass")
+        # remove now unneeded .ass file
+        os.remove(basefilepath + ".ass")
         print("Adding ffmpeg subtitle command to params to softcode the subtitle into the MKV container..")
         return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
     else:
@@ -267,9 +267,12 @@ def _do_ffmpeg_transcoding(filepath, params):
 
         # Now actually do the renaming and transcoding
         print("# executing \n" + command)
-        os.rename(filepath, backup_file)
         try:
+            os.rename(filepath, backup_file)
             subprocess.call(command, shell=True)
+            # removing srt files if present so reexecution of the script is idempotent
+            if (os.path.exists(basefilepath + ".srt")):
+                os.remove(basefilepath + ".srt")
             print("%s has been successfully transcoded \n" % filepath)
         except:
             print("Something went wrong during transcoding!")
@@ -324,6 +327,8 @@ def main():
     parser.add_argument('-i', '--input', required=True, help='filename or directory to transcode')
     parser.add_argument('-s', '--synology', required=False, action='store_true',
                         help='optional switch to determine if a custom synology specific path should be assembled')
+    parser.add_argument('-c', '--check', required=False, action='store_true',
+                        help='optional switch to only check files if they need to be transcoed')
 
     # Parse all the command-line options, automatically checks for required params
     args = parser.parse_args()
@@ -331,7 +336,7 @@ def main():
     # start the transcoding process
     _set_path(args.synology)
     print("## Starting transcoding process..")
-    start_transcoding_process(args.input)
+    start_transcoding_process(args.input, args.check)
 
     # finish, print time needed for execution
     print("## Total transcoding duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
