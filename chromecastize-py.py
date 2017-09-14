@@ -245,38 +245,35 @@ def _do_ffmpeg_transcoding(filepath, params):
         print("{}: File is already playable on a chromecast or fire tv stick, thus skipping it. \n".format(filepath))
     else:
         print("{}: Transcoding file. \n".format(filepath))
-        # filepath = os.path.splitext(filepath)[0]  # This removes the filepath extension from the name
-
-        bakname = filepath + ".bak"
-
-        # outputFile = shlex.quote(str(os.path.abspath(filepath)))
-        # sourceFile = shlex.quote(str(os.path.abspath(bakname)))
-
-        outputFile = _quote(os.path.abspath(filepath))
-        sourceFile = _quote(os.path.abspath(bakname))
-
-        # New output is always matroska container because I want to add subtitle support at some point
-        finalFile = outputFile + ".mkv"
+        # work on absolute paths
+        filepath = os.path.abspath(filepath)
+        # backup file is used as source file during transcoding
+        backup_file = filepath + ".bak"
+        # New output is always matroska container because we want subtitle support by default
+        basefilepath = os.path.splitext(filepath)[0]  # This removes the filepath extension from the name
+        final_file = basefilepath + ".mkv"
 
         # putting together the ffmpeg command
         command = "ffmpeg -loglevel error -stats " \
-                  "-i {srcFile} " \
+                  "-i {backup_file} " \
                   "{subtitle} " \
                   "-c:v {video} " \
                   "-c:a {audio} " \
-                  "{finFile}".format(srcFile=sourceFile,
-                                     subtitle=params["subs"],
-                                     video=params["video"],
-                                     audio=params["audio"],
-                                     finFile=finalFile)
+                  "{final_file}".format(backup_file=_quote(backup_file),
+                                        subtitle=params["subs"],
+                                        video=params["video"],
+                                        audio=params["audio"],
+                                        final_file=_quote(final_file))
 
-        # File needs to be renamed so it's not overwritten)
-        os.rename(filepath, bakname)
-
-        print("executing " + command)
-        subprocess.call(command, shell=True)
-
-        print("%s has successfully been transcoded \n" % filepath)
+        # Now actually do the renaming and transcoding
+        print("# executing \n" + command)
+        os.rename(filepath, backup_file)
+        try:
+            subprocess.call(command, shell=True)
+            print("%s has been successfully transcoded \n" % filepath)
+        except:
+            print("Something went wrong during transcoding!")
+            raise
 
 
 def _quote(s):
