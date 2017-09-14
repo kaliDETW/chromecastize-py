@@ -289,7 +289,7 @@ def _quote(s):
     """
     # TODO check why shlex does not work in windoes and fix
     if os.name == 'nt':
-        return "\"" + s.replace("'", "'\"'\"'") + "\""
+        return "\"" + s.replace("\"", "\\\"") + "\""
     else:
         import shlex
         return shlex.quote(s)
