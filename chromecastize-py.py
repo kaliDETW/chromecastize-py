@@ -9,35 +9,39 @@ from subprocess import check_output
 
 SUPPORTED_EXTENSIONS = 'mkv', 'avi', 'mp4', '3gp', 'mov', 'mpg', 'mpeg', 'qt', 'wmv', 'm2ts', 'rmvb', 'rm', 'rv', \
                        'ogm', 'flv', 'asf'
-SUPPORTED_VIDEO_CODECS = ('AVC')
-SUPPORTED_AUDIO_CODECS = ('AAC' 'MPEG Audio' 'Vorbis' 'Ogg' 'VorbisVorbis')
+SUPPORTED_VIDEO_CODECS = ['AVC']
+SUPPORTED_AUDIO_CODECS = ['AAC', 'AC-3', 'MPEG Audio', 'Vorbis', 'Ogg', 'VorbisVorbis']
 
 DEFAULT_VCODEC = "h264"
 DEFAULT_ACODEC = "libvorbis"
 DEFAULT_GFORMAT = "mkv"
 
 
-def _check_path():
+def _set_path(is_synology):
     """
     Checks the path for ffmpeg and mediainfo. If not found, try to add one placed in the same folder as this module.
     If that did not work, exit
 
     :return:
     """
-    if sys.platform == 'win32':
-        sep = ';'
-    else:
-        sep = ':'
-
-    if _which("ffmpeg") == None:
-        _add_program_to_path("ffmpeg/bin/")
-    if _which("mediainfo") == None:
-        _add_program_to_path("mediainfo/")
+    if is_synology:  # synology specific
+        print("setting synology specific PATH")
+        os.environ['PATH'] = \
+            "/sbin:/bin:/usr/sbin:/usr/bin:/usr/syno/sbin:/usr/syno/bin:/usr/local/sbin:/usr/local/bin"
+        _add_program_to_path("/opt/bin")
+        _add_program_to_path("/opt/lib")
+        _add_program_to_path("/usr/local/mediainfo/bin")
+        print(os.environ['PATH'])
+    else:  # other unix or windows systems try to add relative from the folder this module is in
+        if _which("ffmpeg") == None:
+            _add_program_to_path("ffmpeg/bin/")
+        if _which("mediainfo") == None:
+            _add_program_to_path("mediainfo/")
 
 
 def _add_program_to_path(programpath):
     """
-    Tries to add a program to the path
+    Adds a program to the path
 
     :param programpath:
     :return:
@@ -48,10 +52,12 @@ def _add_program_to_path(programpath):
         sep = ':'
 
     if os.path.exists(programpath):
+        print("adding {} to path".format(programpath))
         abs_programpath = os.path.abspath(programpath)
-        os.environ['PATH'] += sep + r'' + abs_programpath + ''
+        # os.environ['PATH'] += sep + r'' + abs_programpath + ''
+        os.environ['PATH'] = r'' + abs_programpath + '' + sep + os.environ['PATH']
     else:
-        print("Tried to add " + programpath + " to the path but path could not be found.")
+        print("Tried to add " + programpath + " to the path but path does not exist.")
         sys.exit(-1)
 
 
@@ -65,13 +71,17 @@ def start_transcoding_process(path):
     """
     if os.path.isfile(path):  # process a file
         params = _set_ffmpeg_params(path)
-        _do_ffmpeg_transcoding(path, params)
+        if params != None:
+            _do_ffmpeg_transcoding(path, params)
     elif os.path.isdir(path):  # process a directory
         for file in os.listdir(path):
             print("processing '%s'.." % file)
+            start_time = datetime.datetime.now()
             filepath = os.path.join(path, file)
             params = _set_ffmpeg_params(filepath)
-            _do_ffmpeg_transcoding(filepath, params)
+            if params != None:
+                _do_ffmpeg_transcoding(filepath, params)
+                print("# file processing duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
     else:  # It's something else
         print("Invalid input, it is neither a file nor a directory or does not exist! Thus, exiting.")
         sys.exit(-1)
@@ -99,7 +109,7 @@ def _which(program):
             if is_exe(exe_file):
                 return exe_file
 
-    print("Could not find %s on path. Install %s or set the path and try again" % (program, program))
+    # print("Could not find {program} on path.".format(program=program))
     return None
 
 
@@ -140,7 +150,7 @@ def _execute_mediainfo(param, filepath):
         s = check_output(['mediainfo', param, filepath])  # Gets the output from mediainfo
         s1 = s[:-1]  # Removes the second line from output
         name = s1.decode("utf-8")  # s1 is a bytes object but we need a string for the check
-        return name
+        return name.strip()
     except OSError as e:  # Some error happened
         if e.errno == os.errno.ENOENT:  # mediainfo is not installed
             print("Could not find mediainfo on path. Install mediainfo or set the path and try again")
@@ -157,8 +167,28 @@ def _set_subs_param(filepath):
     :param filepath:
     :return:
     """
-    # TODO add subtitle logic
-    return "copy"
+    # check for supported subtitle files .srt and .ass
+    basefilepath = os.path.splitext(filepath)[0]  # remove the filepath extension from the filepath
+    srt_file = os.path.abspath(basefilepath + ".srt")
+    if os.path.exists(srt_file):
+        print("found .srt subtitle file. Adding ffmpeg subtitle command to params to softcode the subtitle into the "
+              "MKV container..")
+        return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
+    elif os.path.exists(basefilepath + ".ass"):  # convert .ass to .srt first before preparing the ffmpeg subtitle
+        # setting
+        print("found .ass subtitle file, converting to .srt first")
+        # putting together the ffmpeg command
+        command = "ffmpeg -i {ass_file} \"{srt_file}\"".format(ass_file=_quote(basefilepath + ".ass"),
+                                                               srt_file=_quote(srt_file))
+        print("executing " + command)
+        subprocess.call(command, shell=True)
+        # remove old .ass file
+        # os.remove(basefilepath + ".ass")
+        print("Adding ffmpeg subtitle command to params to softcode the subtitle into the MKV container..")
+        return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
+    else:
+        print("no external subtitle file found, setting ffmpeg subtitle parameter to 'copy'")
+        return "-map 0 -scodec copy"
 
 
 def _set_vcodec_param(filepath):
@@ -173,7 +203,7 @@ def _set_vcodec_param(filepath):
 
     name = _execute_mediainfo('--Inform=Video;%Format%', filepath)
     print("Video codec: {}".format(name))
-    if name.lower() in SUPPORTED_VIDEO_CODECS.lower():  # Is the video codec supported?
+    if name in SUPPORTED_VIDEO_CODECS:  # Is the video codec supported?
         print("Video codec is compatible, setting video param to 'copy'")
         return "copy"
     else:
@@ -211,42 +241,39 @@ def _do_ffmpeg_transcoding(filepath, params):
     """
     if (params == None):
         print("{}: Could not recognize valid parameters, thus skipping the file. \n".format(filepath))
-    if all(value == "copy" for value in params.values()):  # check if all values in the dict are 'copy'
+    elif all("copy" in value for value in params.values()):  # check if all values in the dict are 'copy'
         print("{}: File is already playable on a chromecast or fire tv stick, thus skipping it. \n".format(filepath))
     else:
         print("{}: Transcoding file. \n".format(filepath))
-        # filepath = os.path.splitext(filepath)[0]  # This removes the filepath extension from the name
-
-        bakname = filepath + ".bak"
-
-        # outputFile = shlex.quote(str(os.path.abspath(filepath)))
-        # sourceFile = shlex.quote(str(os.path.abspath(bakname)))
-
-        outputFile = _quote(os.path.abspath(filepath))
-        sourceFile = _quote(os.path.abspath(bakname))
-
-        # New output is always matroska container because I want to add subtitle support at some point
-        finalFile = outputFile + ".mkv"
+        # work on absolute paths
+        filepath = os.path.abspath(filepath)
+        # backup file is used as source file during transcoding
+        backup_file = filepath + ".bak"
+        # New output is always matroska container because we want subtitle support by default
+        basefilepath = os.path.splitext(filepath)[0]  # This removes the filepath extension from the name
+        final_file = basefilepath + ".mkv"
 
         # putting together the ffmpeg command
         command = "ffmpeg -loglevel error -stats " \
-                  "-i {srcFile} -map 0 " \
-                  "-scodec {subs} " \
-                  "-vcodec {video} " \
-                  "-acodec {audio} " \
-                  "{finFile}".format(srcFile=sourceFile,
-                                     subs=str(params["subs"]),
-                                     video=str(params["video"]),
-                                     audio=str(params["audio"]),
-                                     finFile=finalFile)
+                  "-i {backup_file} " \
+                  "{subtitle} " \
+                  "-c:v {video} " \
+                  "-c:a {audio} " \
+                  "{final_file}".format(backup_file=_quote(backup_file),
+                                        subtitle=params["subs"],
+                                        video=params["video"],
+                                        audio=params["audio"],
+                                        final_file=_quote(final_file))
 
-        # File needs to be renamed so it's not overwritten)
-        os.rename(filepath, bakname)
-
-        print("executing " + command)
-        subprocess.call(command, shell=True)
-
-        print("%s has successfully been transcoded \n" % filepath)
+        # Now actually do the renaming and transcoding
+        print("# executing \n" + command)
+        os.rename(filepath, backup_file)
+        try:
+            subprocess.call(command, shell=True)
+            print("%s has been successfully transcoded \n" % filepath)
+        except:
+            print("Something went wrong during transcoding!")
+            raise
 
 
 def _quote(s):
@@ -257,11 +284,27 @@ def _quote(s):
     :param s:
     :return:
     """
-    # TODO fix this, use proper shlex.quote
+    # TODO check why shlex does not work in windoes and fix
     if os.name == 'nt':
         return "\"" + s.replace("'", "'\"'\"'") + "\""
     else:
-        return "'" + s.replace("'", "'\"'\"'") + "'"
+        import shlex
+        return shlex.quote(s)
+
+
+def _str2bool(v):
+    """
+    parses string to bool
+
+    :param v: string
+    :return: boolean value or raise an error
+    """
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def main():
@@ -273,23 +316,25 @@ def main():
     :return: transcoded video file in mkv format
     """
 
-    # save timestamp
+    # save start timestamp
     start_time = datetime.datetime.now()
 
     # Describe a parser for command-line options
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', required=True, help='filename or directory to transcode')
+    parser.add_argument('-s', '--synology', required=False, action='store_true',
+                        help='optional switch to determine if a custom synology specific path should be assembled')
 
     # Parse all the command-line options, automatically checks for required params
     args = parser.parse_args()
 
     # start the transcoding process
-    _check_path()
-    print("Starting transcoding process..")
+    _set_path(args.synology)
+    print("## Starting transcoding process..")
     start_transcoding_process(args.input)
 
     # finish, print time needed for execution
-    print("## Transcoding finished after %s seconds" % (datetime.datetime.now() - start_time))
+    print("## Total transcoding duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
 
 
 if __name__ == "__main__":
