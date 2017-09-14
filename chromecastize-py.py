@@ -24,24 +24,19 @@ def _set_path(is_synology):
 
     :return:
     """
-    if sys.platform == 'win32':
+    if is_synology: # synology specific
+        print("setting synology specific PATH")
+        os.environ['PATH'] = \
+            "/sbin:/bin:/usr/sbin:/usr/bin:/usr/syno/sbin:/usr/syno/bin:/usr/local/sbin:/usr/local/bin"
+        _add_program_to_path("/opt/bin")
+        _add_program_to_path("/opt/lib")
+        _add_program_to_path("/usr/local/mediainfo/bin")
+        print(os.environ['PATH'])
+    else: # other unix or windows systems try to add relative from the folder this module is in
         if _which("ffmpeg") == None:
             _add_program_to_path("ffmpeg/bin/")
         if _which("mediainfo") == None:
             _add_program_to_path("mediainfo/")
-    else:
-        if is_synology:
-            print("setting synology specific PATH")
-            os.environ['PATH'] = \
-                "/sbin:/bin:/usr/sbin:/usr/bin:/usr/syno/sbin:/usr/syno/bin:/usr/local/sbin:/usr/local/bin"
-            _add_program_to_path("/opt/bin")
-            _add_program_to_path("/opt/lib")
-            _add_program_to_path("/usr/local/mediainfo/bin")
-        else:
-            if _which("ffmpeg") == None:
-                _add_program_to_path("ffmpeg/bin/")
-            if _which("mediainfo") == None:
-                _add_program_to_path("mediainfo/")
 
 
 def _add_program_to_path(programpath):
@@ -57,6 +52,7 @@ def _add_program_to_path(programpath):
         sep = ':'
 
     if os.path.exists(programpath):
+        print("adding {} to path".format(programpath))
         abs_programpath = os.path.abspath(programpath)
         # os.environ['PATH'] += sep + r'' + abs_programpath + ''
         os.environ['PATH'] = r'' + abs_programpath + '' + sep + os.environ['PATH']
@@ -113,7 +109,7 @@ def _which(program):
             if is_exe(exe_file):
                 return exe_file
 
-    print("Could not find %s on path. Install %s or set the path and try again" % (program, program))
+    # print("Could not find {program} on path.".format(program=program))
     return None
 
 
@@ -178,7 +174,7 @@ def _set_subs_param(filepath):
         print("found .srt subtitle file. Adding ffmpeg subtitle command to params to softcode the subtitle into the "
               "MKV container..")
         return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
-    elif os.path.exists(basefilepath + ".ass"): # convert .ass to .srt first before preparing the ffmpeg subtitle
+    elif os.path.exists(basefilepath + ".ass"):  # convert .ass to .srt first before preparing the ffmpeg subtitle
         # setting
         print("found .ass subtitle file, converting to .srt first")
         # putting together the ffmpeg command
@@ -329,8 +325,8 @@ def main():
     # Describe a parser for command-line options
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--input', required=True, help='filename or directory to transcode')
-    parser.add_argument('-s', '--synology', required=False, type=_str2bool, nargs='?',
-                        const=False, help='optional switch to determine if a custom synology path should be assembled')
+    parser.add_argument('-s', '--synology', required=False, action='store_true',
+                        help='optional switch to determine if a custom synology specific path should be assembled')
 
     # Parse all the command-line options, automatically checks for required params
     args = parser.parse_args()
