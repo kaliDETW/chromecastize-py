@@ -61,7 +61,7 @@ def _add_program_to_path(programpath):
         # os.environ['PATH'] += sep + r'' + abs_programpath + ''
         os.environ['PATH'] = r'' + abs_programpath + '' + sep + os.environ['PATH']
     else:
-        print("Tried to add " + programpath + " to the path but path could not be found.")
+        print("Tried to add " + programpath + " to the path but path does not exist.")
         sys.exit(-1)
 
 
@@ -85,7 +85,7 @@ def start_transcoding_process(path):
             params = _set_ffmpeg_params(filepath)
             if params != None:
                 _do_ffmpeg_transcoding(filepath, params)
-            print("# file processing duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
+                print("# file processing duration {duration}".format(duration=(datetime.datetime.now() - start_time)))
     else:  # It's something else
         print("Invalid input, it is neither a file nor a directory or does not exist! Thus, exiting.")
         sys.exit(-1)
@@ -171,16 +171,15 @@ def _set_subs_param(filepath):
     :param filepath:
     :return:
     """
-    # TODO add subtitle logic
-
-    # check for supported subtitle files
+    # check for supported subtitle files .srt and .ass
     basefilepath = os.path.splitext(filepath)[0]  # remove the filepath extension from the filepath
     srt_file = os.path.abspath(basefilepath + ".srt")
     if os.path.exists(srt_file):
         print("found .srt subtitle file. Adding ffmpeg subtitle command to params to softcode the subtitle into the "
               "MKV container..")
         return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
-    elif os.path.exists(basefilepath + ".ass"):
+    elif os.path.exists(basefilepath + ".ass"): # convert .ass to .srt first before preparing the ffmpeg subtitle
+        # setting
         print("found .ass subtitle file, converting to .srt first")
         # putting together the ffmpeg command
         command = "ffmpeg -i {filepath} \"{basefilepath}.srt\"".format(filepath=_quote(filepath),
@@ -292,7 +291,7 @@ def _quote(s):
     :param s:
     :return:
     """
-    # TODO fix this, use proper shlex.quote
+    # TODO check why shlex does not work in windoes and fix
     if os.name == 'nt':
         return "\"" + s.replace("'", "'\"'\"'") + "\""
     else:
