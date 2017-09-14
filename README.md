@@ -33,6 +33,5 @@ chromecastize-py -i [path_to_file_or_directory]
 ```
 
 ## TODOs
-- add subtitle support
-- check if this runs on unix too (e.g. Synology NAS)
+- check if this runs on linux
 - use proper shlex.quote to quote the absolute file paths
