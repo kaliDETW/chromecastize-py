@@ -24,7 +24,7 @@ def _set_path(is_synology):
 
     :return:
     """
-    if is_synology: # synology specific
+    if is_synology:  # synology specific
         print("setting synology specific PATH")
         os.environ['PATH'] = \
             "/sbin:/bin:/usr/sbin:/usr/bin:/usr/syno/sbin:/usr/syno/bin:/usr/local/sbin:/usr/local/bin"
@@ -32,7 +32,7 @@ def _set_path(is_synology):
         _add_program_to_path("/opt/lib")
         _add_program_to_path("/usr/local/mediainfo/bin")
         print(os.environ['PATH'])
-    else: # other unix or windows systems try to add relative from the folder this module is in
+    else:  # other unix or windows systems try to add relative from the folder this module is in
         if _which("ffmpeg") == None:
             _add_program_to_path("ffmpeg/bin/")
         if _which("mediainfo") == None:
@@ -178,17 +178,17 @@ def _set_subs_param(filepath):
         # setting
         print("found .ass subtitle file, converting to .srt first")
         # putting together the ffmpeg command
-        command = "ffmpeg -i {filepath} \"{basefilepath}.srt\"".format(filepath=_quote(filepath),
-                                                                       basefilepath=_quote(basefilepath))
+        command = "ffmpeg -i {ass_file} \"{srt_file}\"".format(ass_file=_quote(basefilepath + ".ass"),
+                                                               srt_file=_quote(srt_file))
         print("executing " + command)
         subprocess.call(command, shell=True)
         # remove old .ass file
-        os.remove(basefilepath + ".ass")
+        # os.remove(basefilepath + ".ass")
         print("Adding ffmpeg subtitle command to params to softcode the subtitle into the MKV container..")
         return "-f srt -i {subfile_path} -c:s \"srt\"".format(subfile_path=_quote(srt_file))
     else:
         print("no external subtitle file found, setting ffmpeg subtitle parameter to 'copy'")
-        return "-scodec copy"
+        return "-map 0 -scodec copy"
 
 
 def _set_vcodec_param(filepath):
@@ -260,7 +260,7 @@ def _do_ffmpeg_transcoding(filepath, params):
 
         # putting together the ffmpeg command
         command = "ffmpeg -loglevel error -stats " \
-                  "-i {srcFile} -map 0 " \
+                  "-i {srcFile} " \
                   "{subtitle} " \
                   "-c:v {video} " \
                   "-c:a {audio} " \
